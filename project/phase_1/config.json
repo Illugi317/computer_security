@@ -1,0 +1,16 @@
+{
+    "id" : "ee5acf7d-0c06-4e6b-b436-d7bd660b64d1",
+    "password" : "testing",
+    "server" :
+    {
+        "ip" : "127.0.0.1" ,
+        "port" : "5000"
+    } ,
+    "actions" : {
+        "delay" : "5" ,
+        "steps" : [
+            "INCREASE [1]" ,
+            "DECREASE [12]"
+        ]
+    }
+}
