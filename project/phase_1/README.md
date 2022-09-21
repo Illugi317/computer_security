@@ -32,8 +32,9 @@ Once the last user disconnects the server drops all memory and writes everything
 TODO:
 # Client
 Redo all of client
-read config from json
-connect to server
+read config from json CHECK
+connect to server CHECK
+send steps CHECK
 establish password and such
 # Server
 Redo clientCommand

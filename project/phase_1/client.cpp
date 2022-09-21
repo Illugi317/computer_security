@@ -2,6 +2,31 @@
 #include <string>
 #include <fstream>
 #include <jsoncpp/json/json.h>
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <algorithm>
+#include <set>
+#include <vector>
+#include <signal.h>
+#include <sstream>
+#include <thread>
+#include <array>
+#include <cstring>
+#include <chrono>
+
+// I have no idea what's being used and what's not. Shit compiles and im happy about that.
+
+char AKNOWlEDGEMENT_MESSAGE[] = "ACK\n";
+char ERROR_MESSAGE[] = "ERROR\n";
 
 Json::Value get_config(char* config_file)
 {
@@ -33,10 +58,25 @@ void send_message(std::string message, int socket)
 char* read_response(int socket)
 {
     // Read response from server
-
+    char* buffer = new char[1024];
+    memset(buffer, 0, 1024);
     std::cout << "Reading response from server" << std::endl;
-    
-    return 
+    int read_err = read(socket, buffer, 1024);
+    if (read_err < 0)
+    {
+        std::cerr << "Error reading response" << std::endl;
+    }
+    return buffer;
+}
+
+bool validate_message(char* message)
+{
+    // Validate message
+    if (strcmp(message,AKNOWlEDGEMENT_MESSAGE) == 0)
+    {
+        return true;
+    }
+    return false;
 }
 
 int main(int argc, char *argv[])
@@ -48,7 +88,7 @@ int main(int argc, char *argv[])
     }
     // We got the correct arguments and now try to open the config file.
     std::cout << "Trying to open config file: " << argv[1] << std::endl;
-    Json::Value config = get_config(argv[1]);
+    const Json::Value config = get_config(argv[1]);
     std::cout << "Config file opened successfully" << std::endl;
     // Get the server address and port from the config file
     std::string server_address = config["server"]["ip"].asString();
@@ -57,13 +97,21 @@ int main(int argc, char *argv[])
     std::cout << "Server address: " << server_address << std::endl;
     std::cout << "Server port: " << server_port  << std::endl;
 
-    // Get Actions in the config file
+    // Get Delay in the config file
+    int delay = std::stoi(config["actions"]["delay"].asCString());
 
-
+    // Steps is an array of strings in the config file and we need to iterate over it
+    const Json::Value steps = config["actions"]["steps"];
+    std::vector<std::string> steps_vector;
+    steps_vector.reserve(steps.size());
+    std::transform(steps.begin(), steps.end(), std::back_inserter(steps_vector), [](const Json::Value& v) { return v.asString(); }); // what the fuck?
+    for(size_t i=0; i<steps_vector.size(); i++)
+    {
+    std::cout << "Sending action: " << steps_vector[i] << std::endl;
+    }
     //Networking time
     int sock;
-    struckt sockaddr_in serv_addr;
-    char buffer[1024] = {0};
+    struct sockaddr_in serv_addr;
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         std::cout << "\n Socket creation error \n" << std::endl;
@@ -84,17 +132,43 @@ int main(int argc, char *argv[])
     }
     // Connection worked and we are connected to the server now.
     std::cout << "Connected to server" << std::endl;
+
+
     //Send UUID to server
-    std::string uuid = config["uuid"].asString();
-    std::cout << "Sending UUID: " << uuid << " to server" << std::endl;
-    send(sock , uuid.c_str() , uuid.length() , 0 );
+    send_message(config["id"].asCString(), sock);
     std::cout << "UUID sent" << std::endl;
+    
     // Read response from server
     char* response = read_response(sock);
     std::cout << "Response from server: " << response << std::endl;
+    if (validate_message(response))
+    {
+        std::cout << "Message validated" << std::endl;
+        //send password
+        send_message(config["password"].asCString(), sock);
+        std::cout << "Password sent" << std::endl;
+        // Read response from server
+        char* response = read_response(sock);
+        std::cout << "Response from server: " << response << std::endl;
+        if (validate_message(response))
+        {
+            std::cout << "Message validated" << std::endl;
+            //send actions
+            std::cout << "Sending actions to server" << std::endl;
+            for(size_t i=0; i<steps_vector.size(); i++)
+            {
+                std::cout << "Sending action: " << steps_vector[i] << std::endl;
+                send_message(steps_vector[i], sock);
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay*1000));
+            }
+            close(sock);
+        }
+    }
+    else
+    {
+        std::cout << "shits broken" << std::endl;
+    }
     return 0;
-}
-
     //Get aknowledgement from server
     //Send password to the server
     //Get aknowledgement from server

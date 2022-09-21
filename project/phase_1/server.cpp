@@ -37,9 +37,12 @@
 #define BACKLOG  5          // Allowed length of queue of waiting connections
 
 // predefined replies from the server
-char SUCCESS_MESSAGE[] = "Command executed successfully\n"; 
-char ERROR_MESSAGE[] = "Error executing command\n"; 
-char MALFORMED_MESSAGE[] = "Unknown command\n"; 
+//char SUCCESS_MESSAGE[] = "Command executed successfully\n"; 
+//char ERROR_MESSAGE[] = "Error executing command\n"; 
+//char MALFORMED_MESSAGE[] = "Unknown command\n"; 
+
+char AKNOWlEDGEMENT_MESSAGE[] = "ACK\n";
+char ERROR_MESSAGE[] = "ERROR\n";
 
 //Global variable for graceful shutdown
 int listenSock;   // Socket for connections to server
