@@ -25,8 +25,7 @@
 
 // I have no idea what's being used and what's not. Shit compiles and im happy about that.
 
-char AKNOWlEDGEMENT_MESSAGE[] = "ACK\n";
-char ERROR_MESSAGE[] = "ERROR\n";
+char AKNOWlEDGEMENT_MESSAGE[] = "ACK";
 
 Json::Value get_config(char* config_file)
 {
@@ -105,10 +104,6 @@ int main(int argc, char *argv[])
     std::vector<std::string> steps_vector;
     steps_vector.reserve(steps.size());
     std::transform(steps.begin(), steps.end(), std::back_inserter(steps_vector), [](const Json::Value& v) { return v.asString(); }); // what the fuck?
-    for(size_t i=0; i<steps_vector.size(); i++)
-    {
-    std::cout << "Sending action: " << steps_vector[i] << std::endl;
-    }
     //Networking time
     int sock;
     struct sockaddr_in serv_addr;

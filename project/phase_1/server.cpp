@@ -1,14 +1,4 @@
-// Simple server for TSAM-409 Programming Assignment 1
-//
-// Compile: g++ -Wall -std=c++11 server.cpp 
-//
-// Command line: ./server 5000 
-//
-// Author(s):
-// Jacky Mallett (jacky@ru.is)
-// Einar Örn Gissurarson (einarog05@ru.is)
-// Stephan Schiffel (stephans@ru.is)
-// Last modified: 20.08.2021
+// Server
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -35,14 +25,27 @@
 #endif
 
 #define BACKLOG  5          // Allowed length of queue of waiting connections
+enum class state { ID, PASSWORD, COMMAND };
+// Pair Struct
+struct Pair
+{
+    u_int64_t counter;
+    std::string uuid;
+    size_t hashed_password = 0;
+    state current_state;
+    int socket;
+    std::string DEBUGcurrent_state;
+};
 
+std::vector<Pair> counters;
+std::hash<std::string> hash_fn;
 // predefined replies from the server
-//char SUCCESS_MESSAGE[] = "Command executed successfully\n"; 
-//char ERROR_MESSAGE[] = "Error executing command\n"; 
-//char MALFORMED_MESSAGE[] = "Unknown command\n"; 
+char SUCCESS_MESSAGE[] = "Command executed successfully\n"; 
+char ERROR_MESSAGE[] = "ERROR"; 
+char MALFORMED_MESSAGE[] = "Unknown command\n"; 
 
-char AKNOWlEDGEMENT_MESSAGE[] = "ACK\n";
-char ERROR_MESSAGE[] = "ERROR\n";
+char ACKNOWLEDGEMENT_MESSAGE[] = "ACK";
+//char ERROR_MESSAGE[] = "ERROR\n";
 
 //Global variable for graceful shutdown
 int listenSock;   // Socket for connections to server
@@ -168,11 +171,151 @@ void sendToClient(int clientSocket, const char *message)
     }
 }
 
-// Process any message received from client on the server
-
-void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds, 
-                  char *buffer) 
+auto get_pair(int socket)
 {
+    // Get counter for uuid
+    for (auto& pair : counters)
+    {
+        if (pair.socket == socket)
+        {
+            return pair;
+        }
+    }
+    throw std::runtime_error("not found");
+}
+bool check_id(int client_socket, char* buffer)
+{
+    try
+    {
+        //check if id is in a pair in the counter vector
+        Pair count = get_pair(client_socket);
+        return true;
+    }
+    catch(const std::exception& e)
+    {
+        // add pair to counter vector
+        Pair count;
+        count.uuid = std::string(buffer);
+        count.counter = 0;
+        count.socket = client_socket;
+        count.current_state = state::ID;
+        count.DEBUGcurrent_state = "ID";
+        counters.push_back(count);
+        return false;
+    }
+}
+bool check_password(int client_socket, char* buffer)
+{
+    //check if password is set
+    //if password is set hash the string buffer and then check if it's the same as the password
+    //if password is not set, has the current buffer and continue the flow.
+    Pair count = get_pair(client_socket);
+    if (count.hashed_password == 0)
+    {
+        count.hashed_password = hash_fn(std::string(buffer));
+        return true;
+    }
+    else
+    {
+        size_t hashed = hash_fn(std::string(buffer));
+        if (count.hashed_password == hashed)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+}
+
+void increment_enum(Pair count)
+{
+    count.current_state = static_cast<state>(static_cast<int>(count.current_state) + 1);
+}
+
+
+void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* buffer)
+{
+    /*
+    States:
+
+    0: ID ack'ed waiting for password
+    1: Password hashed and ack'ed
+    2: Parse commands
+
+    */
+   //check state
+    check_id(client_socket, buffer);
+    Pair count = get_pair(client_socket);
+    std::cout << "Current state: " << count.DEBUGcurrent_state << std::endl;
+    switch (count.current_state)
+    {   
+        case state::ID:
+            if (check_id(client_socket, buffer))
+            {
+                std::cout << "testing" << std::endl;
+                count.current_state = state::PASSWORD;
+                increment_enum(count);
+                count.DEBUGcurrent_state = "PASSWORD";
+                sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
+            }
+            break;
+        case state::PASSWORD:
+            if (check_password(client_socket, buffer))
+            {
+                increment_enum(count);
+                count.current_state = state::COMMAND;
+                count.DEBUGcurrent_state = "COMMAND";
+                sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
+            }
+            else
+            {
+                sendToClient(client_socket, ERROR_MESSAGE);
+                closeClient(client_socket, open_sockets, maxfds);
+            }
+            break;
+        case state::COMMAND:
+        {
+            std::vector<std::string> tokens;     // List of tokens in command from client
+            std::string token;                   // individual token being parsed
+            std::string result = "";
+            std::vector<char> buffer_res(512);
+            // Split command from client into tokens for parsing
+            std::stringstream stream(buffer);
+        
+            // By storing them as a vector - tokens[0] is first word in string
+            while(stream >> token)
+                tokens.push_back(token);
+        
+            // Check if the command has atleast two items and check if the frist word is SYS
+            if(tokens.size() == 2)
+            {
+                Pair count = get_pair(client_socket);
+                if(tokens[0].compare("INCREASE") == 0)
+                {
+                    //Find a way to define the socket as a client socket
+                    count.counter = count.counter + stoi(tokens[1]);
+                    std::cout << "Increase - Counter: " << count.counter << std::endl;
+                }
+                else if(tokens[0].compare("DECREASE") == 0)
+                {
+                    count.counter = count.counter - stoi(tokens[1]);
+                    std::cout << "Decrease - Counter: " << count.counter << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "Unknown command from client:" << buffer << std::endl;
+                sendToClient(client_socket, MALFORMED_MESSAGE);
+            }
+        }
+            break;
+        default:
+            break;
+    }
+ /*
+    //COMMAND ITSELF    
     std::vector<std::string> tokens;     // List of tokens in command from client
     std::string token;                   // individual token being parsed
     std::string result = "";
@@ -185,54 +328,28 @@ void clientCommand(int clientSocket, fd_set *openSockets, int *maxfds,
         tokens.push_back(token);
 
     // Check if the command has atleast two items and check if the frist word is SYS
-    if((tokens.size() >= 2) && (tokens[0].compare("SYS") == 0))
+    if(tokens.size() == 2)
     {
-        std::string stderr_to_stdout(" 2>&1 "); //I use this to get error messages to stdout - this is a bash way to redirect stderr to stdout
-        std::string cmd_str = tokens[1].append(stderr_to_stdout);
-        //build the command string
-        for (int x=2;x<(int)tokens.size();x++)
+        if(tokens[0].compare("INCREASE") == 0)
         {
-            cmd_str.append(tokens[x]);
-            cmd_str.append(" ");
+            //Find a way to define the socket as a client socket
+            Pair count = get_pair(client_socket);
+            count.counter = count.counter + stoi(tokens[1]);
+        
         }
-        cmd_str.pop_back(); //remove the leading space
-        //Open up a pointer that leads to the stdout stream from the command - that stdout stream includes stderr aswell due to line 187
-        FILE* pipe = popen(cmd_str.c_str(),"r");
-        /*
-        The program will essentialy never send the ERROR_MESSAGE since stderr is being redirected
-        to stdout and the pipe pointer does not differentiate between stderr and stdout, only way
-        for the program to send the ERROR_MESSAGE is when popen is unable to get a pointer to an
-        open stream from the output of the command, it would then return NULL
-        */
-        if (pipe == NULL) {
-            sendToClient(clientSocket, ERROR_MESSAGE);
-        }
-        else
+        else if(tokens[0].compare("DECREASE") == 0)
         {
-            //read into success message
-            buffer_res.clear(); //Clear the buffer
-            //Read from the output stream by using fgets
-            while(fgets(buffer_res.data(),512,pipe) != NULL)
-            {
-                //add to the output string that we send to the client
-                result += buffer_res.data();
-                // if buffer is full
-                // make it 2x larger and continue
-            }
-            pclose(pipe); //Close the output stream
-            std::cout << sizeof(result) << std::endl;
-            char size = static_cast<char>(sizeof(result));
-            sendToClient(clientSocket, &size); //this is disgusting
-            std::cout << "why why why am in learning computer science" << std::endl;
-            sendToClient(clientSocket, strdup(result.c_str())); //Send the output string to the client
+            Pair count = get_pair(client_socket);
+            count.counter = count.counter - stoi(tokens[1]);
         }
     }
 else
     {
-        //We go here when the first word in token is not "SYS"
+        //Not a valid command
         std::cout << "Unknown command from client:" << buffer << std::endl;
-        sendToClient(clientSocket, MALFORMED_MESSAGE);
+        sendToClient(client_socket, MALFORMED_MESSAGE);
     }
+    */
 }
 
 int main(int argc, char* argv[])
@@ -329,9 +446,8 @@ int main(int argc, char* argv[])
                       }
                       else // if something was recieved from the client
                       {
-                          std::cout << buffer << std::endl;
                           // Attempt to execute client command
-                          clientCommand(fd, &openSockets, &maxfds, buffer);
+                          client_command(fd, &openSockets, &maxfds, buffer);
                       }
                   }
                }
