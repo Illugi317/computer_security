@@ -29,10 +29,10 @@ enum class state { ID, PASSWORD, COMMAND };
 // Pair Struct
 struct Pair
 {
-    u_int64_t counter;
+    long long int counter;
     std::string uuid;
     size_t hashed_password = 0;
-    state current_state;
+    int current_state;
     int socket;
     std::string DEBUGcurrent_state;
 };
@@ -178,7 +178,7 @@ auto get_pair(int socket)
     {
         if (pair.socket == socket)
         {
-            return pair;
+            return &pair;
         }
     }
     throw std::runtime_error("not found");
@@ -188,7 +188,7 @@ bool check_id(int client_socket, char* buffer)
     try
     {
         //check if id is in a pair in the counter vector
-        Pair count = get_pair(client_socket);
+        Pair* count = get_pair(client_socket);
         return true;
     }
     catch(const std::exception& e)
@@ -198,7 +198,8 @@ bool check_id(int client_socket, char* buffer)
         count.uuid = std::string(buffer);
         count.counter = 0;
         count.socket = client_socket;
-        count.current_state = state::ID;
+        //count.current_state = state::ID;
+        count.current_state = 1;
         count.DEBUGcurrent_state = "ID";
         counters.push_back(count);
         return false;
@@ -209,16 +210,16 @@ bool check_password(int client_socket, char* buffer)
     //check if password is set
     //if password is set hash the string buffer and then check if it's the same as the password
     //if password is not set, has the current buffer and continue the flow.
-    Pair count = get_pair(client_socket);
-    if (count.hashed_password == 0)
+    Pair* count = get_pair(client_socket);
+    if ((*count).hashed_password == 0)
     {
-        count.hashed_password = hash_fn(std::string(buffer));
+        count->hashed_password = hash_fn(std::string(buffer));
         return true;
     }
     else
     {
         size_t hashed = hash_fn(std::string(buffer));
-        if (count.hashed_password == hashed)
+        if ((*count).hashed_password == hashed)
         {
             return true;
         }
@@ -227,11 +228,6 @@ bool check_password(int client_socket, char* buffer)
             return false;
         }
     }
-}
-
-void increment_enum(Pair count)
-{
-    count.current_state = static_cast<state>(static_cast<int>(count.current_state) + 1);
 }
 
 
@@ -247,26 +243,27 @@ void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* 
     */
    //check state
     check_id(client_socket, buffer);
-    Pair count = get_pair(client_socket);
-    std::cout << "Current state: " << count.DEBUGcurrent_state << std::endl;
-    switch (count.current_state)
+    Pair* count = get_pair(client_socket);
+    std::cout << "Current state: " << (*count).DEBUGcurrent_state << std::endl;
+    switch ((*count).current_state)
     {   
-        case state::ID:
+        case 1:
             if (check_id(client_socket, buffer))
             {
-                std::cout << "testing" << std::endl;
-                count.current_state = state::PASSWORD;
-                increment_enum(count);
-                count.DEBUGcurrent_state = "PASSWORD";
+                //count.current_state = state::PASSWORD;
+                //increment_enum(count);
+                (*count).DEBUGcurrent_state = "PASSWORD";
+                ++(*count).current_state;
                 sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
             }
             break;
-        case state::PASSWORD:
+        case 2:
             if (check_password(client_socket, buffer))
             {
-                increment_enum(count);
-                count.current_state = state::COMMAND;
-                count.DEBUGcurrent_state = "COMMAND";
+                //increment_enum(count);
+                //count.current_state = state::COMMAND;
+                ++(*count).current_state;
+                (*count).DEBUGcurrent_state = "COMMAND";
                 sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
             }
             else
@@ -275,7 +272,7 @@ void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* 
                 closeClient(client_socket, open_sockets, maxfds);
             }
             break;
-        case state::COMMAND:
+        case 3:
         {
             std::vector<std::string> tokens;     // List of tokens in command from client
             std::string token;                   // individual token being parsed
@@ -291,17 +288,17 @@ void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* 
             // Check if the command has atleast two items and check if the frist word is SYS
             if(tokens.size() == 2)
             {
-                Pair count = get_pair(client_socket);
+                Pair* count = get_pair(client_socket);
                 if(tokens[0].compare("INCREASE") == 0)
                 {
                     //Find a way to define the socket as a client socket
-                    count.counter = count.counter + stoi(tokens[1]);
-                    std::cout << "Increase - Counter: " << count.counter << std::endl;
+                    count -> counter = (*count).counter + stoi(tokens[1]);
+                    std::cout << "Increase - Counter: " << (*count).counter << std::endl;
                 }
                 else if(tokens[0].compare("DECREASE") == 0)
                 {
-                    count.counter = count.counter - stoi(tokens[1]);
-                    std::cout << "Decrease - Counter: " << count.counter << std::endl;
+                    count -> counter = (*count).counter - stoi(tokens[1]);
+                    std::cout << "Decrease - Counter: " << (*count).counter << std::endl;
                 }
             }
             else
@@ -446,8 +443,9 @@ int main(int argc, char* argv[])
                       }
                       else // if something was recieved from the client
                       {
-                          // Attempt to execute client command
-                          client_command(fd, &openSockets, &maxfds, buffer);
+                            std::cout << "Recieved: " << buffer << std::endl;
+                            // Attempt to execute client command
+                            client_command(fd, &openSockets, &maxfds, buffer);
                       }
                   }
                }
