@@ -17,6 +17,8 @@
 #include <signal.h>
 #include <iostream>
 #include <sstream>
+#include <fstream>
+#include <ctime>
 #include <thread>
 #include <array>
 
@@ -230,6 +232,28 @@ bool check_password(int client_socket, char* buffer)
     }
 }
 
+auto get_current_time()
+{
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    return std::string(std::ctime(&in_time_t));
+}
+
+void write_logfile(int client_socket, char* buffer, std::string uuid, long long int counter)
+{
+    //write to logfile
+    //std::ofstream logfile;
+    //logfile.open("logfile.txt", std::ios_base::app)
+    // FORMAT OF LOGFILE: <timestamp> <client_socket OR ID> <message>;
+    // message can be whatever but problably first with INCREASE and DECREASE but then later on add connected and disconnected
+    std::ofstream logfile;
+    logfile.open("logfile.log", std::fstream::app);
+    std::string time = get_current_time();
+    //chomp newline
+    time.erase(std::remove(time.begin(), time.end(), '\n'), time.cend());
+    logfile << time << " - " << uuid << " - " << std::string(buffer)<< " - " << counter << std::endl;
+    logfile.close();
+}
 
 void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* buffer)
 {
@@ -293,11 +317,13 @@ void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* 
                 {
                     //Find a way to define the socket as a client socket
                     count -> counter = (*count).counter + stoi(tokens[1]);
+                    write_logfile(client_socket, buffer, (*count).uuid, (*count).counter);
                     std::cout << "Increase - Counter: " << (*count).counter << std::endl;
                 }
                 else if(tokens[0].compare("DECREASE") == 0)
                 {
                     count -> counter = (*count).counter - stoi(tokens[1]);
+                    write_logfile(client_socket, buffer, (*count).uuid, (*count).counter);
                     std::cout << "Decrease - Counter: " << (*count).counter << std::endl;
                 }
             }
@@ -361,7 +387,6 @@ int main(int argc, char* argv[])
     socklen_t clientLen;            // address length
     char buffer[1025];              // buffer for reading from clients
     std::vector<int> clientSocketsToClear; // List of closed sockets to remove
-
     if(argc != 2)
     {
         printf("Usage: server <ip port>\n");
@@ -443,7 +468,6 @@ int main(int argc, char* argv[])
                       }
                       else // if something was recieved from the client
                       {
-                            std::cout << "Recieved: " << buffer << std::endl;
                             // Attempt to execute client command
                             client_command(fd, &openSockets, &maxfds, buffer);
                       }
