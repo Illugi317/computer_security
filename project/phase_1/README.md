@@ -37,9 +37,5 @@ connect to server CHECK
 send steps CHECK
 establish password and such
 # Server
-Redo clientCommand
-Redo sendtoclient
-and much more
-
-Start without auth. Just connecting
-Authentication with ID and password. (Struct for keeping them in the set, but hardcode the ID's - ID's will be )
+Logging
+ENUM -> Struct
