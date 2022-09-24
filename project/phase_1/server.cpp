@@ -27,6 +27,8 @@
 #endif
 
 #define BACKLOG  5          // Allowed length of queue of waiting connections
+
+
 enum class state { ID, PASSWORD, COMMAND };
 // Pair Struct
 struct Pair
@@ -176,7 +178,7 @@ void sendToClient(int clientSocket, const char *message)
 auto get_pair(int socket)
 {
     // Get counter for uuid
-    for (auto& pair : counters)
+    for (auto& pair : counters) 
     {
         if (pair.socket == socket)
         {
@@ -456,7 +458,7 @@ int main(int argc, char* argv[])
                {
                   if(FD_ISSET(fd, &readSockets))
                   {
-                      if(recv(fd, buffer, sizeof(buffer), MSG_DONTWAIT) == 0)
+                      if(recv(fd, buffer, sizeof(buffer), 0) == 0)
                       {
                           printf("Client closed connection: %d", fd);
 

@@ -10,17 +10,7 @@
         "delay" : "5" ,
         "steps" : [
             "INCREASE 1",
-            "DECREASE 12",
-            "INCREASE 111",
-            "DECREASE 4",
-            "INCREASE 14",
-            "DECREASE 40",
-            "INCREASE 1",
-            "DECREASE 55",
-            "INCREASE 100",
-            "DECREASE 21",
-            "INCREASE 95",
-            "DECREASE 2"
+            "DECREASE 12"
         ]
     }
 }

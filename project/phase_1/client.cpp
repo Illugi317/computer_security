@@ -156,14 +156,15 @@ int main(int argc, char *argv[])
                 send_message(steps_vector[i], sock);
                 std::this_thread::sleep_for(std::chrono::milliseconds(delay*1000));
             }
-            close(sock);
         }
     }
     else
     {
         std::cout << "shits broken" << std::endl;
     }
-    return 0;
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+    exit(0);
     //Get aknowledgement from server
     //Send password to the server
     //Get aknowledgement from server
