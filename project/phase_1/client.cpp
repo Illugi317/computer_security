@@ -156,6 +156,8 @@ int main(int argc, char *argv[])
                 send_message(steps_vector[i], sock);
                 std::this_thread::sleep_for(std::chrono::milliseconds(delay*1000));
             }
+            //send FIN to server
+            send_message("FIN", sock);
         }
     }
     else

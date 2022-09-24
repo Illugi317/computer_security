@@ -7,7 +7,7 @@
         "port" : "5000"
     } ,
     "actions" : {
-        "delay" : "5" ,
+        "delay" : "100" ,
         "steps" : [
             "INCREASE 1",
             "DECREASE 12"

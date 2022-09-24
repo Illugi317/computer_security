@@ -21,6 +21,7 @@
 #include <ctime>
 #include <thread>
 #include <array>
+#include <regex>
 
 #ifndef SOCK_NONBLOCK
 #include <fcntl.h>
@@ -37,12 +38,14 @@ struct Pair
     std::string uuid;
     size_t hashed_password = 0;
     int current_state;
-    int socket;
+    //int socket;
+    std::vector<int> sockets;
     std::string DEBUGcurrent_state;
 };
-
+std::vector<int> clientSocketsToClear; // List of closed sockets to remove
 std::vector<Pair> counters;
 std::hash<std::string> hash_fn;
+std::thread t;
 // predefined replies from the server
 char SUCCESS_MESSAGE[] = "Command executed successfully\n"; 
 char ERROR_MESSAGE[] = "ERROR"; 
@@ -68,6 +71,7 @@ void signal_handler( int signal_n)
 }
 
 std::set<int> clients; // set of currently open client sockets (file descriptors)
+std::set<int> auth_clients; // set of currently authenticated client sockets (file descriptors) 
 
 // Open socket for specified port.
 //
@@ -135,9 +139,67 @@ int open_socket(int portno)
 
 // Close a client's connection, remove it from the client list, and
 // tidy up select sockets afterwards.
+bool validate_uuid(std::string uuid)
+{
+    std::regex uuid_regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    return std::regex_match(uuid, uuid_regex);
+}
+
+
+auto get_pair(int socket, std::string uuid)
+{
+    if(validate_uuid(uuid))
+    {
+        for (auto& pair : counters) 
+        {
+            if (pair.uuid == uuid)
+            {
+                //new client with same id is connecting, check password
+
+                pair.sockets.push_back(socket);
+                return &pair;
+            }
+        }
+        throw std::runtime_error("not found");
+    }
+    else
+    {
+        for (auto& pair : counters) 
+        {
+            for (auto& s : pair.sockets) 
+            {
+                if (s == socket)
+                {
+                    return &pair;
+                }
+            }
+        }
+        throw std::runtime_error("not found");
+    }
+}
+
+
+void tidy_pair(int client_socket)
+{
+    Pair* count = get_pair(client_socket,"");
+    count->sockets.erase(std::remove(count->sockets.begin(), count->sockets.end(), client_socket), count->sockets.end());
+    if (count->sockets.size() == 0)
+    {
+        //Get index of pair
+        for(std::vector<Pair>::iterator it = counters.begin(); it != counters.end(); ++it) 
+        {
+            if (it->uuid == count->uuid)
+            {
+                counters.erase(it);
+                break;
+            }
+        }
+    }
+}
 
 void closeClient(int clientSocket, fd_set *openSockets, int *maxfds)
 {
+    tidy_pair(clientSocket);
     close(clientSocket);      
 
     // If this client's socket is maxfds then the next lowest
@@ -175,24 +237,13 @@ void sendToClient(int clientSocket, const char *message)
     }
 }
 
-auto get_pair(int socket)
-{
-    // Get counter for uuid
-    for (auto& pair : counters) 
-    {
-        if (pair.socket == socket)
-        {
-            return &pair;
-        }
-    }
-    throw std::runtime_error("not found");
-}
+
 bool check_id(int client_socket, char* buffer)
 {
     try
     {
         //check if id is in a pair in the counter vector
-        Pair* count = get_pair(client_socket);
+        Pair* count = get_pair(client_socket, buffer);
         return true;
     }
     catch(const std::exception& e)
@@ -201,7 +252,7 @@ bool check_id(int client_socket, char* buffer)
         Pair count;
         count.uuid = std::string(buffer);
         count.counter = 0;
-        count.socket = client_socket;
+        count.sockets.push_back(client_socket);
         //count.current_state = state::ID;
         count.current_state = 1;
         count.DEBUGcurrent_state = "ID";
@@ -214,10 +265,11 @@ bool check_password(int client_socket, char* buffer)
     //check if password is set
     //if password is set hash the string buffer and then check if it's the same as the password
     //if password is not set, has the current buffer and continue the flow.
-    Pair* count = get_pair(client_socket);
+    Pair* count = get_pair(client_socket,"");
     if ((*count).hashed_password == 0)
     {
         count->hashed_password = hash_fn(std::string(buffer));
+        count->current_state = 3;
         return true;
     }
     else
@@ -226,6 +278,7 @@ bool check_password(int client_socket, char* buffer)
         if ((*count).hashed_password == hashed)
         {
             return true;
+            count->current_state = 3;
         }
         else
         {
@@ -257,90 +310,71 @@ void write_logfile(int client_socket, char* buffer, std::string uuid, long long 
     logfile.close();
 }
 
+void new_client_auth(int client_socket, fd_set* openSockets, int* maxfds)
+{
+    //Authenticate client
+    /*
+    1. Client connects
+    2. Client sends UUID
+    3. Server verifies UUID and creates a struct if needed
+    4. Client sends password
+    5. Server verfies password
+    6. Client is now authenticated
+    */
+   //receive uuid
+    std::cout << "CLIENT CONNECTED CREATING BUFFER" << std::endl;
+    char buffer[1024] = {0};
+    std::cout << "starting recv" << std::endl;
+    int n = recv(client_socket, buffer, 1024, 0);
+    if (n < 0)
+    {
+        perror("ERROR reading from socket");
+    }
+    std::cout << "RECV done" << std::endl;
+    std::cout << "buffer: " << buffer << std::endl;
+    //check if id is in a pair in the counter vector
+    bool check = validate_uuid(buffer);
+    if(!check)
+    {
+        std::cout << "UUID is not valid" << std::endl;
+        closeClient(client_socket, openSockets, maxfds);
+        return;
+    }
+    check_id(client_socket, buffer);
+    memset(buffer, 0, 1024);
+    std::cout << "buffer: " << buffer << std::endl;
+    sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
+    n = recv(client_socket, buffer, 1024, 0);
+    if (n < 0)
+    {
+        perror("ERROR reading from socket");
+    }
+    //check if password is set
+    if(!check_password(client_socket, buffer))
+    {
+        std::cout << "WRONG PASSWORD" << std::endl;
+        sendToClient(client_socket, ERROR_MESSAGE);
+        closeClient(client_socket, openSockets, maxfds);
+    }
+    else
+    {
+        //send OK
+        std::cout << "PASSWORD OK" << std::endl;
+        sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
+        auth_clients.insert(client_socket);
+        clients.erase(client_socket);
+    }
+}
+
 void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* buffer)
 {
-    /*
-    States:
-
-    0: ID ack'ed waiting for password
-    1: Password hashed and ack'ed
-    2: Parse commands
-
-    */
-   //check state
-    check_id(client_socket, buffer);
-    Pair* count = get_pair(client_socket);
-    std::cout << "Current state: " << (*count).DEBUGcurrent_state << std::endl;
-    switch ((*count).current_state)
-    {   
-        case 1:
-            if (check_id(client_socket, buffer))
-            {
-                //count.current_state = state::PASSWORD;
-                //increment_enum(count);
-                (*count).DEBUGcurrent_state = "PASSWORD";
-                ++(*count).current_state;
-                sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
-            }
-            break;
-        case 2:
-            if (check_password(client_socket, buffer))
-            {
-                //increment_enum(count);
-                //count.current_state = state::COMMAND;
-                ++(*count).current_state;
-                (*count).DEBUGcurrent_state = "COMMAND";
-                sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
-            }
-            else
-            {
-                sendToClient(client_socket, ERROR_MESSAGE);
-                closeClient(client_socket, open_sockets, maxfds);
-            }
-            break;
-        case 3:
-        {
-            std::vector<std::string> tokens;     // List of tokens in command from client
-            std::string token;                   // individual token being parsed
-            std::string result = "";
-            std::vector<char> buffer_res(512);
-            // Split command from client into tokens for parsing
-            std::stringstream stream(buffer);
-        
-            // By storing them as a vector - tokens[0] is first word in string
-            while(stream >> token)
-                tokens.push_back(token);
-        
-            // Check if the command has atleast two items and check if the frist word is SYS
-            if(tokens.size() == 2)
-            {
-                Pair* count = get_pair(client_socket);
-                if(tokens[0].compare("INCREASE") == 0)
-                {
-                    //Find a way to define the socket as a client socket
-                    count -> counter = (*count).counter + stoi(tokens[1]);
-                    write_logfile(client_socket, buffer, (*count).uuid, (*count).counter);
-                    std::cout << "Increase - Counter: " << (*count).counter << std::endl;
-                }
-                else if(tokens[0].compare("DECREASE") == 0)
-                {
-                    count -> counter = (*count).counter - stoi(tokens[1]);
-                    write_logfile(client_socket, buffer, (*count).uuid, (*count).counter);
-                    std::cout << "Decrease - Counter: " << (*count).counter << std::endl;
-                }
-            }
-            else
-            {
-                std::cout << "Unknown command from client:" << buffer << std::endl;
-                sendToClient(client_socket, MALFORMED_MESSAGE);
-            }
-        }
-            break;
-        default:
-            break;
+    if(std::string(buffer) == "FIN"){
+        closeClient(client_socket, open_sockets, maxfds);
+        clientSocketsToClear.push_back(client_socket);
+        return;
     }
- /*
-    //COMMAND ITSELF    
+    check_id(client_socket, buffer);
+    Pair* count = get_pair(client_socket,buffer);
     std::vector<std::string> tokens;     // List of tokens in command from client
     std::string token;                   // individual token being parsed
     std::string result = "";
@@ -355,27 +389,29 @@ void client_command(int client_socket, fd_set* open_sockets, int* maxfds, char* 
     // Check if the command has atleast two items and check if the frist word is SYS
     if(tokens.size() == 2)
     {
+        Pair* count = get_pair(client_socket,"");
         if(tokens[0].compare("INCREASE") == 0)
         {
             //Find a way to define the socket as a client socket
-            Pair count = get_pair(client_socket);
-            count.counter = count.counter + stoi(tokens[1]);
-        
+            count -> counter = (*count).counter + stoi(tokens[1]);
+            write_logfile(client_socket, buffer, (*count).uuid, (*count).counter);
+            std::cout << "Increase - Counter: " << (*count).counter << std::endl;
         }
         else if(tokens[0].compare("DECREASE") == 0)
         {
-            Pair count = get_pair(client_socket);
-            count.counter = count.counter - stoi(tokens[1]);
+            count -> counter = (*count).counter - stoi(tokens[1]);
+            write_logfile(client_socket, buffer, (*count).uuid, (*count).counter);
+            std::cout << "Decrease - Counter: " << (*count).counter << std::endl;
         }
     }
-else
+    else
     {
-        //Not a valid command
         std::cout << "Unknown command from client:" << buffer << std::endl;
         sendToClient(client_socket, MALFORMED_MESSAGE);
     }
-    */
 }
+
+
 
 int main(int argc, char* argv[])
 {
@@ -388,7 +424,6 @@ int main(int argc, char* argv[])
     struct sockaddr_in client;      // address of incoming client
     socklen_t clientLen;            // address length
     char buffer[1025];              // buffer for reading from clients
-    std::vector<int> clientSocketsToClear; // List of closed sockets to remove
     if(argc != 2)
     {
         printf("Usage: server <ip port>\n");
@@ -448,13 +483,16 @@ int main(int argc, char* argv[])
 
                clients.insert(clientSock);
                n--;
-
-               printf("Client connected on server\n");
+               //void new_client_auth(int client_socket, fd_set* openSockets, int* maxfds)
+               //std::thread(std::ref(new_client_auth), clientSock, openSockets, maxfds).detach();
+               t = std::thread(new_client_auth, clientSock, &openSockets, &maxfds);
+               t.detach();
+               printf("Client connected to server\n");
             }
             // Check for commands from already connected clients
             while(n-- > 0)
             {
-               for(auto fd : clients)
+               for(auto fd : auth_clients)
                {
                   if(FD_ISSET(fd, &readSockets))
                   {
@@ -479,7 +517,8 @@ int main(int argc, char* argv[])
                // the loop, since we can't modify the iterator inside the loop.
                for(auto fd : clientSocketsToClear)
                {
-                   clients.erase(fd);
+                   auth_clients.erase(fd);
+                   std::cout << "Client removed from list" << std::endl;
                }
                clientSocketsToClear.clear();
             }

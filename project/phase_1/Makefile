@@ -5,10 +5,10 @@ CCFLAGS = -std=c++14 -Wall
 all: $(CLIENT) $(SERVER)
 
 $(CLIENT): $(CLIENT).cpp
-	$(CC) $(CCFLAGS) $(CLIENT).cpp -o $(CLIENT).out -ljsoncpp
+	$(CC) $(CCFLAGS) $(CLIENT).cpp -o $(CLIENT).out -ljsoncpp -pthread
 
 $(SERVER): $(SERVER).cpp
-	$(CC) $(CCFLAGS) $(SERVER).cpp -o $(SERVER).out -ljsoncpp
+	$(CC) $(CCFLAGS) $(SERVER).cpp -o $(SERVER).out -ljsoncpp -pthread
 
 clean:
 	rm $(CLIENT) $(SERVER)
