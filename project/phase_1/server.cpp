@@ -322,16 +322,12 @@ void new_client_auth(int client_socket, fd_set* openSockets, int* maxfds)
     6. Client is now authenticated
     */
    //receive uuid
-    std::cout << "CLIENT CONNECTED CREATING BUFFER" << std::endl;
     char buffer[1024] = {0};
-    std::cout << "starting recv" << std::endl;
     int n = recv(client_socket, buffer, 1024, 0);
     if (n < 0)
     {
         perror("ERROR reading from socket");
     }
-    std::cout << "RECV done" << std::endl;
-    std::cout << "buffer: " << buffer << std::endl;
     //check if id is in a pair in the counter vector
     bool check = validate_uuid(buffer);
     if(!check)
@@ -342,7 +338,6 @@ void new_client_auth(int client_socket, fd_set* openSockets, int* maxfds)
     }
     check_id(client_socket, buffer);
     memset(buffer, 0, 1024);
-    std::cout << "buffer: " << buffer << std::endl;
     sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
     n = recv(client_socket, buffer, 1024, 0);
     if (n < 0)
@@ -352,17 +347,15 @@ void new_client_auth(int client_socket, fd_set* openSockets, int* maxfds)
     //check if password is set
     if(!check_password(client_socket, buffer))
     {
-        std::cout << "WRONG PASSWORD" << std::endl;
-        sendToClient(client_socket, ERROR_MESSAGE);
-        closeClient(client_socket, openSockets, maxfds);
+        sendToClient(client_socket, ERROR_MESSAGE); //send error message
+        closeClient(client_socket, openSockets, maxfds); //close connection
     }
     else
     {
         //send OK
-        std::cout << "PASSWORD OK" << std::endl;
         sendToClient(client_socket, ACKNOWLEDGEMENT_MESSAGE);
-        auth_clients.insert(client_socket);
-        clients.erase(client_socket);
+        auth_clients.insert(client_socket); //add client to authenticated clients
+        clients.erase(client_socket); //remove client from unauthenticated clients
     }
 }
 
@@ -435,8 +428,6 @@ int main(int argc, char* argv[])
     listenSock = open_socket(atoi(argv[1])); 
 
     printf("Listening on port: %d\n", atoi(argv[1]));
-    printf("       (range of available ports on skel.ru.is is 4000-4100)\n");
-
     if(listen(listenSock, BACKLOG) < 0)
     {
         printf("Listen failed on port %s\n", argv[1]);
