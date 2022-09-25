@@ -59,6 +59,3 @@ Server will remove the UUID from the database
 The client is very verbose on what it's currently doing, and the server is not. It does however log every action to a file.  
 The Server is multithreaded and when a client connects a new thread is created for that client to authenticate it. After it's authenticated its added to a list of clients and the thread is closed. The main thread checks for actions sent from the client. 
 
-
-# Known issues
-* I've got so little time to work on this project that I've had to rush it a bit. This means that there are some issues with the code. I've tried to comment it as much as possible to make it easier to understand.
