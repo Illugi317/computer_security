@@ -39,3 +39,11 @@ establish password and such
 # Server
 Logging
 ENUM -> Struct
+
+
+
+## USAGE:
+# Server
+Compile the server with ```make server``` and run it with ```./server.out <port number>```
+# Client
+Compile the client with ```make client``` and run it with ```./client.out <config file name>.json```
