@@ -1,5 +1,7 @@
 ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 string_to_decode = "OLZLJYLATLZZHNLPZHNYLLHISLULZZLZ"
+DECODED_MESSAGE = "HESECRETMESSAGEISAGREEABLENESSES"
+#string_to_decode = "OLSSVAOPZPZTLMYVTAOLMBABYLAVALSSFVBAOHAFVBOHCLLPNOAFADVKHFZSLMAOLYLVULHYAOFVBTBZANVAVAOLJOBYJOHUKWYHF"
 #TODO: Write a function that takes a string and a key and returns the decoded string
 
 english_letter_frequencies = {'E': 12.70, 'T': 9.06, 'A': 8.17, 'O': 7.51, 'I': 6.97, 'N': 6.75, 'S': 6.33, 'H': 6.09, 'R': 5.99, 'D': 4.25, 'L': 4.03, 'C': 2.78, 'U': 2.76, 'M': 2.41, 'W': 2.36, 'F': 2.23, 'G': 2.02, 'Y': 1.97, 'P': 1.93, 'B': 1.29, 'V': 0.98, 'K': 0.77, 'J': 0.15, 'X': 0.15, 'Q': 0.10, 'Z': 0.07}
@@ -73,36 +75,28 @@ def trigram_score(string):
 
 if '__main__' == __name__:
     #Try to decode the fucker
-    freq_dict = frequency_analysis(string_to_decode)
-    print(freq_dict)
     shift_list = all_shifts(string_to_decode)
-    print(shift_list)
     print("-----------------------")
     over_90 = []
     for idx, x in enumerate(shift_list):
-        if score_shift(x, idx) > 3.5:
+        if score_shift(x, idx) > 2:
             over_90.append((x,score_shift(x, idx)))
-    
-    print(over_90)
     #check bigram score
     over_5 = []
     for x in over_90:
-        if bigram_score(x[0]) > 5:
+        if bigram_score(x[0]) > 3.5:
             over_5.append(x)
-    
-    print(over_5)
     #check trigram score
     trigram =[]
     for x in over_5:
         trigram.append((x[0], trigram_score(x[0])))
-        print(f"{x[0]} - {trigram_score(x[0])}")
-    
     #get the highest trigram score with string
+    highest_string = ''
     highest = 0
     for x in trigram:
         if x[1] > highest:
             highest = x[1]
             highest_string = x[0]
-    print(f"highest trigram score: {highest}")
-    print(f"string: {highest_string}")
-
+    
+    print(f"Key: {shift_list.index(highest_string)}")
+    print(f"Decoded: {highest_string}")

@@ -58,4 +58,5 @@ The secret message is ```OLZLJYLATLZZHNLPZHNYLLHISLULZZLZ```
 Now that we have the secret message we need to decrypt it, All we know is that this is a ceaser cipher. Our decrypting program should be able to pick out the correct solutions from many. So essentialy it needs to be able to decrypt all ceasar cipers and then pick out the correct one.
 
 ### Solution
-We can use the following python script to decrypt any ceaser cipher:
+The script decrypt.py is a script that can decrypt ceasar ciphers, you might need to fidget with the constants for the scoring system. The script is not perfect but it can decrypt the secret message.
+Just run the script with ```python3 decrypt.py``` and it will print out the decrypted message, that is ```HESECRETMESSAGEISAGREEABLENESSES``` and the key is 19 to the left.
