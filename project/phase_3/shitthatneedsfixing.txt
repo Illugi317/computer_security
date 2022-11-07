@@ -1,0 +1,14 @@
+Server:
+- crashes if invalid UUID is given FIXED
+- crashes if a valid command is sent with an invalid argument, e.g. [INCREASE a] leads to a server crash FIXED
+
+Client:
+- if the server is killed while a client is logged in, the client does not seem to notice, but instead sends out all the commands and then terminates FIXED
+
+Server side:
+First was fixed with a closeClient given the invalid uuid
+Second was fixed with a function that checks the argument otherwise the server sends a "Malformed message" and ignores the command.
+
+Client:
+Fixed by making the server send an ack to the sever after each command and if the client does not get an ack after a command, it will timeout and stop itself.
+

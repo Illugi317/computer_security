@@ -1,0 +1,24 @@
+{
+    "id" : "5637857d-0564-4345-aaae-fe1ee96f01a9",
+    "password" : "testing",
+    "server" :
+    {
+        "ip" : "127.0.0.1" ,
+        "port" : "5000"
+    } ,
+    "actions" : {
+        "delay" : "5" ,
+        "steps" : [
+            "INCREASE 1",
+            "INCREASE 1",
+            "INCREASE 1",
+            "INCREASE 1",
+            "INCREASE 1",
+            "INCREASE a",
+            "INCREASE 1",
+            "INCREASE 1",
+            "INCREASE 1",
+            "DECREASE 12"
+        ]
+    }
+}
